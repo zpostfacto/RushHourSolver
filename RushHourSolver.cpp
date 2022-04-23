@@ -5,19 +5,19 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include <stdint.h>
 #include <string.h>
 
 #include <set>
 #include <vector>
 
-// Assume the board is square
+// The rush bour board is 6x6.
 constexpr int BOARD_SIZE = 6;
 
-// The exit ramp is on a particular row
+// Cars can exit the board by moving off to the right on the 3rd
+// row (index 2).
 constexpr int BOARD_EXIT_Y = 2;
 
-// Set to true to enable dumping of output to show our thinking
+// Set this to true to enable dumping of output to show our thinking
 constexpr bool DEBUG_PROGRESS_OUTPUT = false;
 
 // Struct used to describe a particular configuration of cars on the board
@@ -35,8 +35,15 @@ struct Board
 	char cell[BOARD_SIZE][BOARD_SIZE];
 
 	// Define a comparison operator so we can use std::set to
-	// optimize lookups.  Hashing would actually be more optimal,
-	// but this is simple
+	// optimize lookups.
+	//
+	// It doesn't realy matter here exactly what comparison operator
+	// is used.  We just need to establish a valid ordering over
+	// the set of board states.   This choice has the nice property
+	// of being one line of easy-to-understand code that is reasonably
+	// fast.  If we wanted to optimize this, we would probably not
+	// make this function faster, we would just switch to use a hashmap
+	// instead.
 	inline bool operator<( const Board &x ) const
 	{
 		return memcmp( cell, x.cell, sizeof(cell) ) < 0;
@@ -139,35 +146,16 @@ struct Board
 // so all the states reachable with 1 move follow the initial state,
 // then all the states reachable with 2 moves, etc.
 //
-// The second item in the pair is the index into this list
-// of the previous state.  This is used to reconstruct the
-// optimal path.
+// The second item in the pair is the index (into this list)
+// of the previous state that we came from.  This chain is used
+// to reconstruct the path of moves, when we reach the goal state.
 std::vector< std::pair<Board,int> > state_list;
 
-// The same set of states as in state_list, but in a map
-// so that we can quickly check if a state is already in the list.
+// The same set of states as state_list, but in a data structure
+// that is fast to check if a state is already present.  A std::set
+// optimizes search by using a balanced binary tree.  A hashmap is
+// another option, but that's a bit more code to implement.
 std::set<Board> states_in_list; 
-
-// Recursive helper function to print the solution.
-int PrintSolutionRecursive( int i, const Board *next )
-{
-	if ( i < 0 )
-		return 0;
-	const Board &cur = state_list[i].first;
-	int step_number = PrintSolutionRecursive( state_list[i].second, &cur )+1;
-	printf( "Solution step %d\n", step_number );
-	cur.Print( "  ", next );
-	printf( "\n" );
-	return step_number;
-}
-
-// Called when we have found the solution.  It is assumed to
-// be the last state in the list.
-void PrintSolutionAndQuit()
-{
-	PrintSolutionRecursive( state_list.size()-1, nullptr );
-	exit(0);
-}
 
 // See if we have been in this state before.  If not, add
 // it to the table of states, which serves as the queue
@@ -217,9 +205,28 @@ void CheckAddState( const Board &state, int from )
 	}
 }
 
+// Recursive helper function to print the solution.
+// i is the index of a state that is on the optimal
+// path of moves.  This function prints all prior moves
+// in order (by calling itself recuseively) and the prints
+// the current move.  It also returns the number of moves
+// that have been printed in total, sio that the move number
+// can be output.
+int PrintSolutionRecursive( int i, const Board *next )
+{
+	if ( i < 0 )
+		return 0;
+	const Board &cur = state_list[i].first;
+	int step_number = PrintSolutionRecursive( state_list[i].second, &cur )+1;
+	printf( "Solution step %d\n", step_number );
+	cur.Print( "  ", next );
+	printf( "\n" );
+	return step_number;
+}
+
 // Check if we can move a car one square in a given direction
 // into the space at x,y, which must be empty.  dx,dy is the
-// direction we will *scan* from x,y.  The car will move in
+// direction we will scan from x,y.  The car will move in
 // the opposite direction, into the empty space.
 // 
 // Why are dx,dy passed as template arguments rather than ordinary
@@ -271,7 +278,7 @@ inline void CheckMove( Board &s, int x, int y, int idx_state )
 	tx -= dx;
 	ty -= dy;
 
-	// Move the car one space, in the opposite direction of dx,dy
+	// Move the car one space, in the opposite direction of dx,dy,
 	// into the empty space.  This only requires changing two grid
 	// cells, no matter how long the car is.
 	s.SetCell( y, x, car );
@@ -290,7 +297,8 @@ inline void CheckMove( Board &s, int x, int y, int idx_state )
 			CheckAddState( s, idx_state );
 
 			// And we're done
-			PrintSolutionAndQuit();
+			PrintSolutionRecursive( state_list.size()-1, nullptr );
+			exit(0);
 		}
 		else
 		{
