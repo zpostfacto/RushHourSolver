@@ -14,4 +14,7 @@ code, the easiest thing is probably just to hardcode one.  There are three examp
 game included.  Just comment in the appropriate one.  We use the same basic format for describing
 the board as the cards do that come with the game.
 
+You can learn a great deal about how the code "thinks" thorugh the problem by modifying
+the code to set DEBUG_PROGRESS_OUTPUT=true.
+
 I hope you find the code interesting and useful.
